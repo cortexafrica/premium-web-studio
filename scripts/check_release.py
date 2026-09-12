@@ -198,11 +198,34 @@ FONT_JS = """
 """
 
 
+# Du plus strict au plus tolerant. Le premier est le meilleur etat pour mesurer,
+# et le premier a ceder quand la liaison faiblit.
+ATTENTES = ("networkidle", "load", "domcontentloaded")
+DELAI_MS = 120_000          # 30 s est le defaut de Playwright, pas une decision
+
+
+async def ouvrir(page, url):
+    """Charge la page et renvoie le critere qui a fonctionne.
+
+    Echouer sur « networkidle » ne dit rien de la page : cela dit que le reseau
+    n'a pas connu 500 ms de calme dans le delai imparti. Refuser une livraison
+    la-dessus, c'est refuser pour une mauvaise raison.
+    """
+    dernier = None
+    for attente in ATTENTES:
+        try:
+            await page.goto(url, wait_until=attente, timeout=DELAI_MS)
+            return attente
+        except Exception as exc:
+            dernier = exc
+    raise dernier
+
+
 async def collect(url):
     async with async_playwright() as p:
         browser = await p.chromium.launch()
         page = await browser.new_page(viewport={"width": 1440, "height": 900})
-        await page.goto(url, wait_until="networkidle")
+        attente = await ouvrir(page, url)
         height = await page.evaluate("document.documentElement.scrollHeight")
         for y in range(0, height + 900, 900):
             await page.evaluate(f"window.scrollTo(0, {y})")
@@ -211,6 +234,7 @@ async def collect(url):
         await page.evaluate("document.fonts.ready")
         data = await page.evaluate(COLLECT_JS)
         data["fonts"] = await page.evaluate(FONT_JS)
+        data["attente"] = attente
         await browser.close()
     return data
 
@@ -295,9 +319,19 @@ def main():
     try:
         data = asyncio.run(collect(args.url))
     except Exception as exc:
-        sys.exit(f"Chargement impossible : {str(exc).splitlines()[0]}")
+        sys.exit(f"Chargement impossible après {len(ATTENTES)} tentatives, du critère "
+                 f"le plus strict au plus tolérant : {str(exc).splitlines()[0]}")
 
     errors, warnings = [], []
+
+    # Le critere ayant servi fait partie du constat : une page jointe seulement
+    # en « domcontentloaded » a ete mesuree avant la fin de ses ressources, et
+    # le lecteur doit le savoir pour interpreter ce qui suit.
+    if data.get("attente") and data["attente"] != ATTENTES[0]:
+        warnings.append(
+            f"Page chargée en « {data['attente']} » et non « {ATTENTES[0]} » : le "
+            "réseau n'a pas eu de moment calme. Les mesures restent valables, mais "
+            "une ressource lente a pu ne pas être prise en compte.")
 
     # --- La police déclarée s'applique-t-elle vraiment ? ---------------------
     fonts = data.get("fonts") or {}
