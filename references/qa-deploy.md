@@ -117,6 +117,47 @@ même nom laisse les téléphones servir l'ancienne version depuis leur cache �
 client voit la version corrigée nulle part et croit que rien n'a bougé. Passer de
 `clip.mp4` à `clip-2.mp4` règle la question définitivement.
 
+### La consigne donnée au client est un livrable, et elle a ses propres défauts
+
+Un site professionnel demande presque toujours des étapes que seul le client
+peut faire : poser des enregistrements DNS, créer un compte, coller une clé.
+Ces consignes ne passent aucun contrôle — le défaut ne se produit pas dans le
+code, il se produit **entre la consigne et la main du client**.
+
+**Ne jamais présenter un réglage sous forme de tableau dont les en-têtes
+reprennent les étiquettes du formulaire visé.** Le 12 septembre 2026, un réglage
+Supabase donné ainsi :
+
+| Nom | Valeur |
+|---|---|
+| `QUOTE_FROM` | `Ma Boutique <onboarding@resend.dev>` |
+
+a produit, quatre-vingt-dix secondes plus tard, un secret réellement nommé
+`VALEUR` dans le projet. Le formulaire a deux champs étiquetés « Nom » et
+« Valeur » : l'en-tête a été saisi comme s'il était le contenu. La faute est
+celle de la mise en forme, pas celle du client.
+
+**La forme sûre est une ligne par champ, avec l'étiquette exacte de l'écran :**
+
+> Dans le champ **Nom** : `QUOTE_FROM`
+> Dans le champ **Valeur** : `Ma Boutique <onboarding@resend.dev>`
+
+Un tableau reste bon quand il énumère **plusieurs** entrées de même nature —
+les quatre lignes DNS d'un domaine, par exemple : là, chaque ligne est un objet
+distinct et l'en-tête ne peut pas être confondu avec un contenu.
+
+**Toute étape confiée se termine par une vérification, et la plupart ne peuvent
+pas être vérifiées par un script.** Le DNS, on le relit aux serveurs faisant
+autorité. Une clé posée dans une interface, non : aucune API ne la relit. Il
+faut alors **demander la capture de l'écran après l'action** et lire ce qui s'y
+trouve réellement, y compris les lignes dont on n'a pas parlé. C'est exactement
+ce qui a manqué ce jour-là : la ligne parasite est restée douze heures avant
+d'apparaître, par hasard, sur une capture envoyée pour une autre raison.
+
+**Ce qu'on note à chaque fois** : une étape confiée au client est un point
+d'abandon et une source de défauts. Elle s'inscrit comme un connecteur à
+construire, pour que la fois suivante elle n'existe plus.
+
 Ne jamais déployer en production sans accord explicite de l'utilisateur ; une prévisualisation peut être proposée d'office.
 
 Après déploiement : relancer `preflight.py` sur l'URL en ligne. Les chemins, les
