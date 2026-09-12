@@ -26,6 +26,8 @@ Code de sortie 1 dès qu'un point bloquant échoue.
 import argparse
 import json
 import re
+import socket
+import struct
 import subprocess
 import sys
 import time
@@ -126,6 +128,104 @@ RESOLVEURS = (
     "https://dns.google/resolve",
     "https://cloudflare-dns.com/dns-query",
 )
+
+
+def _encoder_nom(nom):
+    out = b""
+    for part in nom.split("."):
+        out += bytes([len(part)]) + part.encode("ascii")
+    return out + b"\x00"
+
+
+def _sauter_nom(donnees, i):
+    """Avance au-dela d'un nom, compression comprise. Sa valeur ne nous sert pas."""
+    while True:
+        n = donnees[i]
+        if n == 0:
+            return i + 1
+        if n & 0xC0 == 0xC0:          # pointeur de compression : deux octets
+            return i + 2
+        i += 1 + n
+
+
+def dns_autoritaire(nom, type_num, serveur_ip):
+    """Une requete DNS brute, sans dependance et sans cache.
+
+    On la fabrique a la main parce que nslookup ignore les types qui nous
+    interessent ici — CAA vaut 257, DNSKEY 48 — et qu'aucune bibliotheque n'est
+    supposee installee chez celui qui fait tourner le controle.
+    """
+    paquet = struct.pack(">HHHHHH", 0x4242, 0x0000, 1, 0, 0, 0)
+    paquet += _encoder_nom(nom) + struct.pack(">HH", type_num, 1)
+
+    prise = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    prise.settimeout(15)
+    try:
+        prise.sendto(paquet, (serveur_ip, 53))
+        reponse, _ = prise.recvfrom(4096)
+    finally:
+        prise.close()
+
+    _, _drapeaux, nq, nr, _, _ = struct.unpack(">HHHHHH", reponse[:12])
+    i = 12
+    for _ in range(nq):
+        i = _sauter_nom(reponse, i) + 4
+
+    sortie = []
+    for _ in range(nr):
+        i = _sauter_nom(reponse, i)
+        t, _cls, _ttl, longueur = struct.unpack(">HHIH", reponse[i:i + 10])
+        i += 10
+        corps = reponse[i:i + longueur]
+        i += longueur
+        if t != type_num:
+            continue
+        if type_num == 257:           # CAA : drapeau, longueur d'etiquette, etiquette, valeur
+            taille = corps[1]
+            etiquette = corps[2:2 + taille].decode("ascii", "replace")
+            valeur = corps[2 + taille:].decode("ascii", "replace")
+            sortie.append(f"{corps[0]} {etiquette} {valeur}")
+        else:
+            sortie.append(corps.hex()[:32])
+    return sortie
+
+
+def dns_zone(nom, type_num):
+    """Demande aux serveurs de la zone. Renvoie (enregistrements, interroge).
+
+    Un cache n'a pas sa place ici : on consulte ce controle juste apres avoir
+    change un enregistrement, et une reponse en retard de plusieurs heures fait
+    defaire une correction juste.
+    """
+    serveurs, ok = dns_doh(nom, "NS")
+    if not ok or not serveurs:
+        return [], False
+
+    # On interroge TOUS les serveurs de la zone, pas le premier qui repond.
+    # Constate le 12 septembre 2026 : trois interrogations d'affilee sur la
+    # meme zone ont rendu « issuewild », puis « issue », puis « issue ». Les
+    # noeuds d'un hebergeur ne convergent pas tous a la meme seconde apres une
+    # modification. Conclure sur un echantillon, c'est tirer a pile ou face.
+    vues = {}
+    for hote in serveurs:
+        hote = hote.rstrip(".")
+        try:
+            ip = socket.gethostbyname(hote)
+            vues[hote] = tuple(sorted(dns_autoritaire(nom, type_num, ip)))
+        except Exception:
+            continue
+
+    if not vues:
+        return [], False
+
+    reponses = set(vues.values())
+    if len(reponses) > 1:
+        # Le desaccord est lui-meme le constat : il dit qu'une modification est
+        # en cours de propagation, ce qu'aucune reponse seule ne peut dire.
+        detail = " | ".join(f"{h} : {list(v) or 'rien'}" for h, v in vues.items())
+        return [f"__DESACCORD__ {detail}"], True
+
+    return list(reponses.pop()), True
 
 
 def dns_doh(nom, type_):
@@ -363,14 +463,29 @@ def domaine(hote, bloquants, remarques):
         remarques.append("Pas de DMARC : rien n'indique aux serveurs destinataires quoi "
                          "faire d'un message usurpé. C'est l'enregistrement qui rend le "
                          "SPF utile.")
-    caa, interroge = dns_doh(hote, "CAA")
+    # La zone d'abord : une autorite de certification ne lit pas un CAA dans un
+    # cache, et nous non plus. Le repli sur DNS-over-HTTPS ne sert que si l'UDP
+    # sortant est filtre, et il peut alors retarder de plusieurs heures.
+    caa, interroge = dns_zone(hote, 257)
     if not interroge:
+        caa, interroge = dns_doh(hote, "CAA")
+        if interroge and caa:
+            remarques.append("CAA lu via un résolveur public, pas aux serveurs de la "
+                             "zone : la réponse peut avoir plusieurs heures de retard.")
+    if interroge and caa and str(caa[0]).startswith("__DESACCORD__"):
+        # Un seul constat : le desaccord dit tout, et ajouter « contrôle
+        # impossible » par-dessus ferait croire a deux problemes distincts.
+        remarques.append(
+            "CAA : les serveurs de la zone ne répondent pas tous la même chose — "
+            "une modification est en cours de propagation. Contrôle à refaire dans "
+            f"quelques minutes. {str(caa[0])[13:]}")
+    elif not interroge:
         remarques.append("CAA : contrôle impossible, aucun résolveur n'a répondu. "
                          "Ce n'est pas la même chose qu'un enregistrement absent.")
     elif not caa:
         remarques.append("Pas d'enregistrement CAA : n'importe quelle autorité peut "
                          "émettre un certificat pour votre domaine.")
-    elif not any(" issue " in f" {c} " or c.strip().startswith(("0 issue ", "128 issue "))
+    elif not any(re.search(r"\bissue\s", c) and not re.search(r"\bissuewild\s", c)
                  for c in caa):
         # RFC 8659 §4.3 : « Each issuewild Property MUST be ignored when
         # processing a request for an FQDN that is not a Wildcard Domain Name ».
@@ -382,7 +497,9 @@ def domaine(hote, bloquants, remarques):
             "(*.domaine) ; pour un certificat ordinaire, n'importe quelle "
             "autorité reste autorisée. Remplacer l'étiquette par « issue ».")
 
-    dnskey, interroge = dns_doh(hote, "DNSKEY")
+    dnskey, interroge = dns_zone(hote, 48)
+    if not interroge:
+        dnskey, interroge = dns_doh(hote, "DNSKEY")
     if not interroge:
         remarques.append("DNSSEC : contrôle impossible, aucun résolveur n'a répondu.")
     elif not dnskey:
