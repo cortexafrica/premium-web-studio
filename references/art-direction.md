@@ -84,6 +84,71 @@ Nommer un univers de réalisateur ou de photographe peut transformer un rendu g�
 
 Le mouvement qui répond à une action (ouvrir, ajouter, confirmer) est toujours bienvenu. Le mouvement automatique sert à attirer l'attention une fois, pas à décorer chaque section.
 
+## 6b. Une animation ne doit jamais pouvoir retenir du contenu
+
+Une apparition au défilement masque du texte en attendant un signal. Si le
+signal n'arrive pas, le texte n'arrive pas. **Le visiteur ne voit pas une
+animation ratée, il voit une page trouée** — et il ne saura jamais ce qu'il a
+manqué.
+
+Quatre règles, toutes tirées de défauts constatés sur un site en production le
+12 septembre 2026. Les deux dernières viennent du **correctif lui-même** : le
+filet de sécurité était plus dangereux que l'animation.
+
+**1. Le CSS ne masque jamais de lui-même.** Le piège d'origine : la feuille de
+style posait `opacity: 0` dès son chargement, et le JavaScript, arrivé bien plus
+tard, devait révéler. Entre les deux la page était trouée ; si le script ne
+tournait pas, elle le restait.
+
+> Le sélecteur doit exiger une classe posée **par le script**, après vérification
+> qu'il peut la retirer : `.js-reveal [data-reveal]:not([data-revealed])`. Pas de
+> script, pas de masquage. La page perd son animation, jamais son contenu.
+
+**2. Masquer avant la première peinture.** Avec un effet monté après le rendu
+(`useEffect`), la page est peinte visible, puis masquée : un clignotement à
+chaque chargement, et il se voit surtout là où l'on voulait aider, sur un
+téléphone lent. `useLayoutEffect` s'exécute avant la peinture. Mesure : à 16 ms,
+les blocs hors écran doivent déjà être à `opacity: 0`.
+
+**3. Un observateur d'intersection ne suffit pas.** Un doigt qui lance la page
+fait franchir l'écran à un bloc **entre deux observations** : aucun seuil n'est
+signalé, le bloc n'est jamais révélé, et il reste vide pour toujours une fois
+dépassé. Constaté : le bouton vidéo, à 5 768 px au-dessus de l'écran, encore
+invisible.
+
+> Ajouter un balayage au défilement, cadencé sur `requestAnimationFrame`, qui
+> révèle tout ce qui est entré dans l'écran **ou l'a dépassé**. Il ne remplace
+> pas l'observateur, qui donne l'animation au bon moment ; il garantit qu'aucun
+> bloc ne reste en arrière.
+
+**4. Un délai de secours inconditionnel tue l'effet.** Le premier filet révélait
+tout après 1,2 s. Sur une connexion lente, il révélait la page entière avant que
+le visiteur ait eu le temps de défiler : l'effet n'existait nulle part où il
+aurait été visible. **Un filet qui attrape tout le monde n'est plus un filet,
+c'est un plafond.**
+
+> Le filet ne doit se déclencher que si l'observateur est réellement mort. Un
+> observateur d'intersection rappelle toujours une première fois, pour chaque
+> élément observé, qu'il soit à l'écran ou non. Ce premier rappel désarme le
+> filet.
+
+**Les cinq cas à éprouver avant de livrer une apparition au défilement**, et
+aucun n'est théorique — chacun a échoué au moins une fois :
+
+| Cas | Ce qu'on exige |
+|---|---|
+| Au chargement, sans défiler | les blocs hors écran sont masqués — l'effet existe |
+| Saut direct en bas de page | aucun bloc masqué |
+| Défilement rapide par à-coups | aucun bloc masqué |
+| Observateur neutralisé | aucun bloc masqué — le filet a rendu la page |
+| `prefers-reduced-motion` | aucun bloc masqué |
+
+**Et la règle qui les résume** : sur toute animation qui masque, la question
+n'est pas « est-ce que ça s'affiche bien ? » mais **« que voit quelqu'un pour
+qui le mécanisme ne s'est pas déclenché ? »**. Si la réponse est « moins de
+contenu », le mécanisme est à refaire, quelle que soit sa beauté quand il
+fonctionne.
+
 ## 7. Structures par type de page
 
 Adapter, ne pas remplir mécaniquement. Chaque section doit répondre à une question du visiteur.
