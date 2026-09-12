@@ -82,7 +82,30 @@ Après déploiement : relancer `preflight.py` sur l'URL en ligne. Les chemins, l
 en-têtes de cache et surtout les URL absolues (image de partage, adresse canonique)
 diffèrent du local — et c'est en ligne que le lien partagé sera testé.
 
-## 5. Livraison
+## 5. Après la livraison : la porte reste en place
+
+**Un site vérifié aujourd'hui ne l'est pas dans trois mois.** Une clé expire, un
+palier gratuit sature, un enregistrement DNS est modifié, un catalogue externe
+ferme. Sans surveillance, **c'est le client qui l'apprend** — et pour une
+livraison vendue comme vérifiée, c'est le pire échec possible : on a promis
+exactement ce qu'on a laissé se défaire.
+
+Déposer `assets/workflows/verification-continue.yml` dans
+`.github/workflows/` du dépôt du client. Une seule valeur à changer : `SITE_URL`.
+
+Ce qu'il fait, et pourquoi c'est fait ainsi :
+
+- il tourne **contre le site en ligne**, pas contre le build. C'est la règle
+  d'or : on vérifie ce qui est servi ;
+- il **ouvre une issue** quand un bloquant apparaît, et la **referme seul** quand
+  il disparaît. Pas un e-mail de plus que personne ne lit ;
+- `issues: write` et rien d'autre. Il ne peut pas toucher au code.
+
+**Ce que ça change commercialement.** Une vérification à la livraison se paie une
+fois. Une vérification qui reste vraie se paie tous les mois. C'est le même
+script : seule la fréquence change, et avec elle le modèle.
+
+## 6. Livraison
 
 Remettre à l'utilisateur :
 

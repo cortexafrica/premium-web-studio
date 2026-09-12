@@ -45,7 +45,21 @@ studio/
 
 ## Déroulé
 
-### 0. Inventaire des outils (1 minute)
+### 0. Ouvrir `studio/journal.md`, puis inventaire des outils (1 minute)
+
+**Note l'heure à chaque étape** — intake, direction, production, construction,
+porte, déploiement — et, à la fin, **le nombre d'étapes confiées au client**
+(créer un compte, poser un enregistrement DNS, valider une page).
+
+Ces deux mesures décident du prix, de la capacité, et de la question de savoir
+si une personne seule peut tenir la charge. On ne les a jamais prises.
+
+La seconde compte plus que la première : **si le nombre d'étapes confiées ne
+baisse pas d'une création à l'autre, le produit n'avance pas** — quelle que soit
+la qualité des instructions données. Chaque étape restante est un connecteur à
+construire, pas une fatalité à documenter.
+
+### 0 bis. Inventaire des outils
 
 Vérifie ce qui est disponible : Higgsfield (skills officiels, MCP ou CLI — voir `references/higgsfield-pipeline.md` §1), `ffmpeg`, Node, Python avec Pillow et Playwright, MCP Playwright, outils de déploiement. Adapte le plan à ce qui existe au lieu d'échouer plus tard. Signale en une phrase ce qui manque et son impact.
 

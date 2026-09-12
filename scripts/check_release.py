@@ -14,6 +14,8 @@ Il vérifie :
   - une page 404 propre dans le build ;
   - l'orthographe du marché visé (--market us interdit l'anglais britannique) ;
   - les unités métriques nues sur un marché impérial ;
+  - les liens : un lien interne mort est bloquant, un lien externe mort est
+    signalé (un catalogue tombé ne casse pas la page, il coupe la vente) ;
   - les contradictions entre deux affirmations de la même page.
 
 Usage :
@@ -28,6 +30,7 @@ import asyncio
 import json
 import re
 import sys
+import urllib.error
 import urllib.request
 from io import BytesIO
 from pathlib import Path
@@ -122,6 +125,11 @@ COLLECT_JS = """
     allText: (document.body.textContent || '').replace(/\\s+/g, ' ').trim(),
     jsonLd: [...document.querySelectorAll('script[type="application/ld+json"]')]
       .map((s) => s.textContent || ''),
+    // href resolu par le navigateur : on obtient une URL absolue meme quand le
+    // document ecrit un chemin relatif.
+    links: [...document.querySelectorAll('a[href]')]
+      .map((a) => ({ href: a.href, texte: (a.textContent || '').trim().slice(0, 60) }))
+      .filter((l) => /^https?:/.test(l.href)),
   };
 }
 """
@@ -208,7 +216,12 @@ async def collect(url):
 
 
 def fetch(url, limit=6_000_000):
-    request = urllib.request.Request(url, headers={"User-Agent": "check-release/1.0"})
+    # Un navigateur est annonce : plusieurs serveurs refusent un agent inconnu
+    # par 403, ce qui ferait signaler comme mort un lien parfaitement valide.
+    request = urllib.request.Request(url, headers={
+        "User-Agent": "Mozilla/5.0 (compatible; check-release/1.0)",
+        "Accept": "*/*",
+    })
     with urllib.request.urlopen(request, timeout=45) as response:
         return response.status, response.read(limit)
 
@@ -304,6 +317,39 @@ def main():
             warnings.append(
                 f"La police « {famille} » ne couvre pas {len(manquants)} caractère(s) de la "
                 f"page : {apercu}. Ils sortent dans une autre fonte, visible surtout sur Safari.")
+
+    # --- Les liens : le defaut qui ne se voit pas et qui coupe la vente ------
+    # Un catalogue externe qui tombe n'abime pas l'apparence de la page. Elle
+    # reste belle, et elle ne vend plus rien. Personne ne s'en apercoit avant
+    # qu'un client se plaigne.
+    origine = urlparse(args.url).hostname
+    vus = set()
+    for lien in (data.get("links") or []):
+        href = lien["href"].split("#")[0]
+        if href in vus:
+            continue
+        vus.add(href)
+        interne = urlparse(href).hostname == origine
+
+        cible = "interne" if interne else "externe"
+        try:
+            status, _ = fetch(href, limit=2048)
+        except urllib.error.HTTPError as e:
+            # urllib leve sur 4xx et 5xx : sans ce cas, tout finirait en
+            # « HTTPError », et un constat qui ne dit pas 404 ne sert a rien.
+            status = e.code
+        except Exception as exc:
+            # Un lien interne injoignable est notre faute. Un lien externe qui
+            # ne repond pas peut etre un incident passager chez un tiers : on
+            # le signale sans bloquer une livraison pour autant.
+            (errors if interne else warnings).append(
+                f"Lien {cible} injoignable : {href} "
+                f"(« {lien['texte']} », {type(exc).__name__}).")
+            continue
+
+        if status >= 400:
+            (errors if interne else warnings).append(
+                f"Lien {cible} mort ({status}) : {href} (« {lien['texte']} »).")
 
     # --- Indexation : ce que les robots viennent chercher --------------------
     for nom, role in (("robots.txt", "les robots ne savent pas ce qu'ils peuvent lire"),
