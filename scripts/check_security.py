@@ -32,6 +32,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+import urllib.parse
 from urllib.parse import urljoin, urlparse
 
 # Une console Windows repond souvent en cp1252 : le premier caractere non
@@ -118,6 +119,42 @@ def dns_type(nom, type_):
                               timeout=30).stdout
     except Exception:
         return ""
+
+
+# Deux fournisseurs : une panne de l'un ne doit pas faire conclure a une absence.
+RESOLVEURS = (
+    "https://dns.google/resolve",
+    "https://cloudflare-dns.com/dns-query",
+)
+
+
+def dns_doh(nom, type_):
+    """Interroge un type quelconque, sans dependre des outils du systeme.
+
+    Renvoie (enregistrements, interroge). « interroge » vaut False quand aucun
+    resolveur n'a repondu : l'appelant doit alors dire qu'il n'a PAS PU
+    verifier, et surtout pas que l'enregistrement est absent.
+
+    nslookup ne suffisait pas : celui de Windows ignore les types CAA et DNSKEY
+    et repond « unknown query type ». Le controle lisait cette absence de
+    reponse comme une absence d'enregistrement, et emettait sa remarque quoi
+    qu'il arrive.
+    """
+    for base in RESOLVEURS:
+        url = f"{base}?name={urllib.parse.quote(nom)}&type={type_}"
+        requete = urllib.request.Request(url, headers={
+            "accept": "application/dns-json",
+            "User-Agent": "check-security/1.0",
+        })
+        try:
+            with urllib.request.urlopen(requete, timeout=25) as reponse:
+                data = json.loads(reponse.read(200_000).decode("utf-8", "replace"))
+        except Exception:
+            continue
+        if data.get("Status") not in (0, 3):      # 3 = le nom n'existe pas
+            continue
+        return [r.get("data", "") for r in (data.get("Answer") or [])], True
+    return [], False
 
 
 # --- Les contrôles -----------------------------------------------------------
@@ -326,10 +363,29 @@ def domaine(hote, bloquants, remarques):
         remarques.append("Pas de DMARC : rien n'indique aux serveurs destinataires quoi "
                          "faire d'un message usurpé. C'est l'enregistrement qui rend le "
                          "SPF utile.")
-    if "CAA" not in dns_type(hote, "CAA"):
+    caa, interroge = dns_doh(hote, "CAA")
+    if not interroge:
+        remarques.append("CAA : contrôle impossible, aucun résolveur n'a répondu. "
+                         "Ce n'est pas la même chose qu'un enregistrement absent.")
+    elif not caa:
         remarques.append("Pas d'enregistrement CAA : n'importe quelle autorité peut "
                          "émettre un certificat pour votre domaine.")
-    if "DNSSEC" not in dns_type(hote, "DNSKEY") and "DNSKEY" not in dns_type(hote, "DNSKEY"):
+    elif not any(" issue " in f" {c} " or c.strip().startswith(("0 issue ", "128 issue "))
+                 for c in caa):
+        # RFC 8659 §4.3 : « Each issuewild Property MUST be ignored when
+        # processing a request for an FQDN that is not a Wildcard Domain Name ».
+        # Un jeu CAA sans propriete « issue » ne protege donc que les
+        # certificats generiques, et laisse passer tous les autres.
+        remarques.append(
+            f"CAA présent mais sans propriété « issue » : {caa}. "
+            "« issuewild » ne gouverne que les certificats génériques "
+            "(*.domaine) ; pour un certificat ordinaire, n'importe quelle "
+            "autorité reste autorisée. Remplacer l'étiquette par « issue ».")
+
+    dnskey, interroge = dns_doh(hote, "DNSKEY")
+    if not interroge:
+        remarques.append("DNSSEC : contrôle impossible, aucun résolveur n'a répondu.")
+    elif not dnskey:
         remarques.append("DNSSEC absent : une réponse DNS peut être falsifiée en chemin. "
                          "Un détournement de domaine annule toutes les autres protections.")
 
