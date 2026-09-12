@@ -28,6 +28,7 @@ import json
 import re
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -171,10 +172,34 @@ def secrets_dans_historique(repo: Path, bloquants, remarques):
 SANS_ENTETES = ("github.com", "github pages")
 
 
+def fetch_tenace(url, methode="GET", corps=None, entetes_http=None, essais=3):
+    """Comme fetch(), mais ne conclut pas a l'injoignable sur un seul echec.
+
+    Renvoie (code, en-tetes, contenu, cause). « cause » est None des qu'une
+    reponse HTTP est revenue, quel que soit son code.
+
+    On ne rejoue que l'echec de niveau reseau — code None, donc rien n'est
+    parvenu au serveur. Rejouer une requete effectivement recue risquerait de
+    la declencher deux fois.
+    """
+    cause = None
+    for essai in range(essais):
+        code, h, contenu = fetch(url, methode, corps, entetes_http)
+        if code is not None:
+            return code, h, contenu, None
+        cause = (contenu or b"").decode("utf-8", "replace") or "cause inconnue"
+        if essai < essais - 1:
+            time.sleep(1 + essai)      # 1 s, puis 2 s : de quoi passer un a-coup
+    return None, {}, b"", cause
+
+
 def entetes(url, bloquants, remarques):
-    code, h, _ = fetch(url)
+    code, h, _, cause = fetch_tenace(url)
     if code is None:
-        bloquants.append(f"Site injoignable : {url}")
+        # La cause est dans le constat : « injoignable » ne dit pas si c'est le
+        # DNS, le certificat, un delai depasse ou un refus, et le lecteur
+        # refait alors l'enquete que le script venait de faire.
+        bloquants.append(f"Site injoignable apres 3 tentatives : {url} ({cause})")
         return
 
     serveur = (h.get("server") or "").lower()
@@ -213,6 +238,42 @@ def fichiers_exposes(url, bloquants, remarques):
                          "devient lisible, commentaires compris.")
 
 
+# Les noms de champs par lesquels un service raconte sa propre configuration.
+# On ne cherche pas un secret — un secret en clair serait deja attrape par le
+# controle des secrets — mais l'aveu qu'il y en a un, et qu'il est en place.
+ETAT_SENSIBLE = (
+    "key", "token", "secret", "credential", "apikey", "auth",
+    "config", "env", "detected", "configured", "enabled", "ready",
+    "debug", "version", "build", "commit",
+)
+
+
+def etat_divulgue(corps):
+    """Champs de configuration trouves dans un corps JSON. Liste vide sinon.
+
+    La valeur n'est recopiee que si elle est booleenne ou numerique : un rapport
+    est un fichier, il se partage et se commit, et il ne doit jamais devenir
+    l'endroit ou une valeur sensible finit par etre ecrite.
+    """
+    try:
+        data = json.loads((corps or b"").decode("utf-8", "replace"))
+    except Exception:
+        return []
+    if not isinstance(data, dict):
+        return []
+
+    trouves = []
+    for champ, valeur in data.items():
+        if not any(mot in champ.lower() for mot in ETAT_SENSIBLE):
+            continue
+        if isinstance(valeur, bool) or isinstance(valeur, (int, float)):
+            trouves.append((champ, repr(valeur)))
+        else:
+            # Ni la valeur ni un extrait : seulement de quoi la reconnaitre.
+            trouves.append((champ, f"une valeur de {len(str(valeur))} caractères"))
+    return trouves
+
+
 def fonctions(urls, bloquants, remarques):
     """Le point faible habituel de cette architecture : la fonction detient les
     cles, et c'est le controle d'origine qui decide qui peut la faire agir."""
@@ -223,9 +284,11 @@ def fonctions(urls, bloquants, remarques):
     for u in urls:
         nom = u.rstrip("/").split("/")[-1]
 
-        code, _, _ = fetch(u, "POST", sonde, {"Content-Type": "application/json"})
+        code, _, _, cause = fetch_tenace(
+            u, "POST", sonde, {"Content-Type": "application/json"})
         if code is None:
-            remarques.append(f"Fonction « {nom} » injoignable : contrôle impossible.")
+            remarques.append(f"Fonction « {nom} » injoignable apres 3 tentatives, "
+                             f"contrôle impossible ({cause}).")
             continue
         if code not in (401, 403):
             bloquants.append(
@@ -241,10 +304,17 @@ def fonctions(urls, bloquants, remarques):
                 f"Fonction « {nom} » : une origine étrangère est acceptée (code {code}). "
                 "N'importe quel site peut faire agir la fonction au nom de vos visiteurs.")
 
-        code, _, _ = fetch(u, "GET")
+        code, _, corps = fetch(u, "GET")
         if code == 200:
-            remarques.append(f"Fonction « {nom} » répond en GET : vérifier qu'elle "
-                             "ne divulgue aucun état de configuration.")
+            remarques.append(f"Fonction « {nom} » répond 200 en GET : cela confirme "
+                             "à un inconnu que le point d'entrée existe et tourne. "
+                             "Si rien ne l'exige (vérification de webhook, sonde de "
+                             "santé), répondre 405 comme aux autres verbes.")
+            for champ, valeur in etat_divulgue(corps):
+                remarques.append(
+                    f"Fonction « {nom} » divulgue son état de configuration en GET : "
+                    f"le champ « {champ} » vaut {valeur}. C'est le premier "
+                    "renseignement que cherche quelqu'un qui sonde un service.")
 
 
 def domaine(hote, bloquants, remarques):
