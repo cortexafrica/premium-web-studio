@@ -57,6 +57,47 @@ les visiteurs ailleurs. La couper.
 - **Clavier** : tabulation dans l'ordre logique, focus visible, FAQ ouvrable au clavier.
 - **Mouvement réduit** : activer l'émulation `prefers-reduced-motion` et vérifier la version légère.
 
+## 3b. Les e-mails transactionnels se vérifient sur le message reçu
+
+Un site qui envoie des e-mails livre deux produits, pas un. Le second ne passe
+par aucun navigateur, aucune capture, aucun contrôle : **il n'existe que dans
+une boîte de réception**. C'est l'angle mort le plus courant.
+
+**Déclencher chaque chemin pour de vrai, puis lire le message reçu.** Pas le
+gabarit dans le code : le message, avec ses en-têtes, dans le journal du
+fournisseur d'envoi ou dans la boîte.
+
+**La règle qui a coûté le plus cher** :
+
+> Un e-mail ne donne jamais une instruction que ses propres en-têtes ne
+> permettent pas.
+
+« Répondez directement » exige un `Reply-To`. Sans lui, répondre renvoie
+l'équipe à sa propre boîte, et personne ne s'en aperçoit : le message part, il
+ne revient pas en erreur, il n'arrive nulle part. Le 12 septembre 2026, un
+prospect qui laissait un numéro WhatsApp sans e-mail déclenchait exactement
+cela.
+
+**Ce qu'on vérifie sur chaque message reçu :**
+
+- l'expéditeur est le domaine du client, pas le bac à sable du fournisseur ;
+- `Reply-To` pointe sur le prospect, et l'instruction du pied de page
+  correspond au canal réellement disponible ;
+- chaque moyen de contact est **actionnable en un geste** : un numéro devient
+  un lien `wa.me`, une adresse un `mailto:`. Ce message se lit sur un
+  téléphone, et un numéro à recopier est un délai de plus ;
+- les chiffres viennent du registre de faits, comme sur la page ;
+- le rendu tient sans CSS moderne : styles en ligne, aucune feuille externe.
+
+**Énumérer les chemins, pas seulement le principal.** Formulaire complet,
+conversation avec e-mail, conversation avec téléphone seul, et le cas où le
+visiteur ne donne rien. Chacun produit un message différent, ou pas de message
+du tout — et « pas de message » est une décision à assumer, pas un oubli.
+
+**Ce qui reste à construire** : aucun script ne contrôle encore ces messages.
+C'est une lacune connue du skill, à combler le jour où une création envoie plus
+de deux e-mails. En attendant, c'est une lecture, et elle est obligatoire.
+
 ## 4. Déploiement
 
 | Cible | Commande | Remarque |
