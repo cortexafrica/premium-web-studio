@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Remplacer depuis studio/brief.md : titre ≤ 60 caractères, description ≤ 155 -->
+    <title>Nom de marque — promesse en une ligne</title>
+    <meta name="description" content="Description de la page, écrite pour le client final." />
+    <meta property="og:title" content="Nom de marque — promesse en une ligne" />
+    <meta property="og:description" content="Description de la page, écrite pour le client final." />
+    <meta property="og:image" content="/og.jpg" />
+    <meta name="theme-color" content="#101412" />
+    <link rel="preload" as="fetch" href="/frames/manifest.json" crossorigin />
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- Contenu lisible sans JavaScript (SEO, aperçus de liens, connexions très lentes) -->
+    <noscript>
+      <h1>Nom de marque — promesse en une ligne</h1>
+      <p>Description de l'offre et moyen de contact.</p>
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

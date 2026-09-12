@@ -1,0 +1,8 @@
+{
+  "facts": [
+    { "id": "offer.price", "label": "Prix de l'offre", "value": 0, "unit": "XAF", "source": "[À confirmer par le client]" }
+  ],
+  "derived": [],
+  "allowed_numbers": [],
+  "ignore_patterns": []
+}

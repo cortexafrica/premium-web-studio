@@ -1,0 +1,17 @@
+# Rien de ce qui est engendré à l'exécution n'entre ici.
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+
+# Les espaces de travail d'un projet client vivent dans le projet, jamais ici.
+studio/
+dist/
+node_modules/
+
+# Aucune clé, jamais. Le contrôle de sécurité le vérifie, mais la première
+# barrière est de ne pas pouvoir les ajouter par mégarde.
+.env
+.env.*
+*.key
+*.pem
