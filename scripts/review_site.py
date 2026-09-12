@@ -3,8 +3,10 @@
 
 Capture desktop (1440x900) et mobile (390x844) à plusieurs profondeurs de défilement,
 teste la version légère (?lite=1), relève les erreurs console, les images cassées,
-les textes restés entre crochets, les cibles tactiles trop petites et les champs de
-saisie sous 16 px — sous ce seuil, Safari iOS zoome toute la page à la saisie.
+les textes restés entre crochets, les cibles tactiles trop petites, les champs de
+saisie sous 16 px — sous ce seuil, Safari iOS zoome toute la page à la saisie —
+et les images trop petites pour l'écran, qui paraissent floues sans que rien
+dans le code ne le laisse deviner.
 Une troisième passe tourne sous WebKit, le moteur de Safari : c'est ce que voit un
 iPhone, et Chromium ne le reproduit pas.
 Ouvre ensuite les captures produites et critique-les réellement : c'est le but.
@@ -36,7 +38,10 @@ except ImportError:
 
 VIEWPORTS = {
     "desktop": {"width": 1440, "height": 900},
-    "mobile": {"width": 390, "height": 844, "is_mobile": True, "has_touch": True, "device_scale_factor": 2},
+    "mobile": {"width": 390, "height": 844, "is_mobile": True, "has_touch": True,
+               # 3 et non 2 : c'est la densite des telephones vendus depuis
+               # des annees, et c'est a 3 que le manque de definition se voit.
+               "device_scale_factor": 3},
 }
 
 AUDIT_JS = """
@@ -57,10 +62,31 @@ AUDIT_JS = """
     .map(el => `${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''} `
                + `(${parseFloat(getComputedStyle(el).fontSize)}px)`)
     .slice(0, 10);
+  // Une image trop petite pour l'ecran est indistinguable d'une image trop
+  // compressee : meme flou, meme reproche du client. Le navigateur connait les
+  // deux nombres, il suffit de les lui demander.
+  const ratio = window.devicePixelRatio || 1;
+  // Le seuil suit l'ecran, et s'arrete a 2. En dessous de la densite reelle,
+  // le navigateur etire le fichier : c'est la que le flou apparait. Au-dela de
+  // 2 le gain cesse d'etre visible et on ne ferait qu'alourdir la page — un
+  // controle qui reclame l'inutile finit par etre ignore.
+  const exige = Math.min(ratio, 2);
+  const softImages = [...document.images]
+    .filter((img) => {
+      const w = img.getBoundingClientRect().width;
+      return w > 40 && img.naturalWidth > 0 && img.naturalWidth < w * exige;
+    })
+    .map((img) => {
+      const w = Math.round(img.getBoundingClientRect().width);
+      return `${(img.currentSrc || img.src).split('/').pop()} `
+        + `(affichee ${w} px, fichier ${img.naturalWidth} px, `
+        + `${(img.naturalWidth / w).toFixed(1)}x, il en faut ${exige})`;
+    })
+    .slice(0, 12);
   const h1 = document.querySelectorAll('h1').length;
   const missingAlt = [...document.images].filter(img => !img.hasAttribute('alt')).length;
   return { placeholders, brokenImages, smallTargets, smallFontInputs, h1Count: h1,
-           imagesWithoutAlt: missingAlt,
+           imagesWithoutAlt: missingAlt, softImages, devicePixelRatio: ratio,
            title: document.title, pageHeight: document.documentElement.scrollHeight };
 }
 """
@@ -166,6 +192,10 @@ def main():
         if data["h1Count"] != 1:
             problems += 1
             print(f"⚠ {data['h1Count']} balise(s) h1 (attendu : 1)")
+        if data.get("softImages"):
+            problems += len(data["softImages"])
+            print(f"⚠ Image(s) trop petites pour l'écran — elles paraîtront floues, "
+                  f"et le client l'attribuera à la compression : {data['softImages']}")
         if data["imagesWithoutAlt"]:
             problems += 1
             print(f"⚠ {data['imagesWithoutAlt']} image(s) sans attribut alt")
