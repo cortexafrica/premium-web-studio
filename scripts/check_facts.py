@@ -48,6 +48,14 @@ NUMBER_RE = re.compile(
 # écart, donc « RÉSULTAT : OK » — le pire des faux positifs.
 MIN_BODY_CHARS = 200
 
+# La mention légale et son année. check_release.py EXIGE cette mention sur toute
+# livraison ; sans cette exception la porte se contredit — elle réclame la
+# mention, puis refuse le chiffre qu'elle contient. Trouvé le 13 septembre 2026
+# en écrivant notre propre page, et le blocage attendait chaque site à venir.
+COPYRIGHT_RE = re.compile(
+    r"(?:©|\(c\)|copyright)\s*\d{4}(?:\s*[-–]\s*\d{4})?",
+    re.IGNORECASE)
+
 # Ordinaux (1er, 2e, 3ème, 21st…) : ce ne sont pas des quantités à sourcer
 ORDINAL_RE = re.compile(r"\b\d+\s?(?:er|re|ère|e|ème|nd|nde|st|th|rd)\b", re.IGNORECASE)
 
@@ -57,7 +65,13 @@ COLLECT_JS = """
   document.querySelectorAll('[alt], [aria-label], [title]').forEach(el => {
     ['alt', 'aria-label', 'title'].forEach(attr => { const v = el.getAttribute(attr); if (v) texts.push(v); });
   });
-  document.querySelectorAll('meta[name="description"], meta[property^="og:"]').forEach(m => texts.push(m.content || ''));
+  // og:title et og:description seulement : ce sont les deux que quelqu'un lit
+  // dans un apercu de lien. og:image:width et og:image:height sont des
+  // dimensions techniques, et les exiger dans un registre de faits metier
+  // obligeait a y inscrire « 1200 » et « 630 » — un non-sens qui apprend a
+  // ignorer le controle.
+  document.querySelectorAll('meta[name="description"], meta[property="og:title"], meta[property="og:description"]')
+    .forEach(m => texts.push(m.content || ''));
   texts.push(document.title);
   return {
     texts,
@@ -173,7 +187,8 @@ def main():
 
     unsourced = {}
     for text in data["texts"]:
-        clean = ORDINAL_RE.sub(" ", text)
+        clean = COPYRIGHT_RE.sub(" ", text)
+        clean = ORDINAL_RE.sub(" ", clean)
         for pattern in ignore:
             clean = pattern.sub(" ", clean)
         for match in NUMBER_RE.finditer(clean):

@@ -271,16 +271,31 @@ def check_spelling(text, market):
     return unique
 
 
+# Fenetre autour de la devise ou l'on cherche un montant. « 49 € », « EUR 15 »,
+# « 20 euros » tiennent tous dedans ; une phrase qui mentionne la devise sans
+# rien facturer, non.
+FENETRE_MONTANT = 18
+
+
 def check_currency(text, market):
-    """Une devise qui n'est pas celle du marche vise est une coquille de fond."""
+    """Un PRIX dans une devise etrangere au marche est une coquille de fond.
+
+    La devise seule ne suffit pas : il faut un montant a cote. Une page peut
+    parler d'euros sans en facturer — la notre decrit un defaut de devise trouve
+    chez un client, et se faisait refuser pour cette phrase meme.
+    """
     interdites = CURRENCY.get(market, ())
     trouve = []
     for mot in interdites:
         motif = rf"\b{re.escape(mot)}\b" if mot.isalpha() else re.escape(mot)
-        m = re.search(motif, text, re.IGNORECASE)
-        if m:
+        for m in re.finditer(motif, text, re.IGNORECASE):
+            autour = text[max(0, m.start() - FENETRE_MONTANT):
+                          m.end() + FENETRE_MONTANT]
+            if not re.search(r"\d", autour):
+                continue            # une mention, pas un prix
             phrase = text[max(0, m.start() - 45):m.start() + 55]
             trouve.append((mot, " ".join(phrase.split())))
+            break
     return trouve
 
 

@@ -46,15 +46,28 @@ VIEWPORTS = {
 
 AUDIT_JS = """
 () => {
-  const text = document.body.innerText;
+  // Le texte entre crochets signale un trou laisse dans un gabarit. Mais
+  // une sortie machine en contient legitimement — « [blocking] », « [ok] »,
+  // un niveau de log — et elle est reproduite mot pour mot par principe. On
+  // retire donc <pre> et <code> avant de chercher.
+  const sansMachine = document.body.cloneNode(true);
+  sansMachine.querySelectorAll('pre, code, kbd, samp').forEach((n) => n.remove());
+  const text = sansMachine.innerText || '';
   const placeholders = [...new Set((text.match(/\\[[^\\]\\n]{3,80}\\]/g) || []))].slice(0, 20);
   const brokenImages = [...document.images]
     .filter(img => img.complete && img.naturalWidth === 0 && !img.src.startsWith('data:'))
     .map(img => img.getAttribute('src')).slice(0, 20);
+  // Hors tabulation ou sous aria-hidden : un piege a robots, un element
+  // masque aux technologies d'assistance. Personne ne peut l'atteindre,
+  // donc sa taille ne veut rien dire.
+  const atteignable = (el) =>
+    el.getAttribute('tabindex') !== '-1' && !el.closest('[aria-hidden="true"]');
   const smallTargets = [...document.querySelectorAll('a, button, summary, input, select')]
+    .filter(atteignable)
     .filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && (r.height < 44 || r.width < 44); })
     .map(el => (el.innerText || el.getAttribute('aria-label') || el.tagName).trim().slice(0, 40)).slice(0, 15);
   const smallFontInputs = [...document.querySelectorAll('input, select, textarea')]
+    .filter(atteignable)
     .filter(el => {
       if (el.type === 'hidden' || el.offsetParent === null) return false;
       return parseFloat(getComputedStyle(el).fontSize) < 16;
