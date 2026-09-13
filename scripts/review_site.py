@@ -84,22 +84,96 @@ AUDIT_JS = """
   // 2 le gain cesse d'etre visible et on ne ferait qu'alourdir la page — un
   // controle qui reclame l'inutile finit par etre ignore.
   const exige = Math.min(ratio, 2);
+
+  // La largeur REELLE du fichier, et non celle que le DOM annonce.
+  //
+  // Piege corrige ici : sur une image choisie dans un srcset en « w »,
+  // naturalWidth est DEJA divise par la densite que le navigateur a calculee.
+  // Il vaut donc toujours a peu pres la largeur d'affichage, et le controle
+  // comparait une valeur a elle-meme : il ne pouvait rien trouver, et criait
+  // au flou sur chaque image d'un ecran dense. Un controle qui se trompe dans
+  // les deux sens ne mesure rien.
+  //
+  // La seule source fiable est le descripteur « w » de l'entree qui correspond
+  // a currentSrc. A defaut de srcset, naturalWidth dit vrai.
+  const largeurReelle = (img) => {
+    const choisi = img.currentSrc || img.src;
+    // TOUS les jeux du <picture>, pas un seul : le fichier retenu vient
+    // souvent d'une <source> (AVIF, WebP) alors que l'<img> porte le repli
+    // JPEG. Chercher dans un seul des deux, c'est ne jamais trouver la bonne
+    // entree sur les navigateurs modernes — et retomber en silence sur la
+    // mesure fausse qu'on voulait justement corriger.
+    const jeux = [];
+    const propre = img.getAttribute('srcset');
+    if (propre) jeux.push(propre);
+    const pere = img.closest('picture');
+    if (pere) {
+      pere.querySelectorAll('source[srcset]').forEach((s) => jeux.push(s.getAttribute('srcset')));
+    }
+    for (const jeu of jeux) {
+      for (const entree of jeu.split(',')) {
+        const bouts = entree.trim().split(/\\s+/);
+        if (!bouts[0]) continue;
+        const largeur = /^([0-9]+)w$/.exec(bouts[1] || '');
+        if (largeur && new URL(bouts[0], location.href).href === choisi) {
+          return parseInt(largeur[1], 10);
+        }
+      }
+    }
+    return img.naturalWidth;
+  };
+
   const softImages = [...document.images]
     .filter((img) => {
       const w = img.getBoundingClientRect().width;
-      return w > 40 && img.naturalWidth > 0 && img.naturalWidth < w * exige;
+      return w > 40 && img.naturalWidth > 0 && largeurReelle(img) < w * exige;
     })
     .map((img) => {
       const w = Math.round(img.getBoundingClientRect().width);
+      const reelle = largeurReelle(img);
       return `${(img.currentSrc || img.src).split('/').pop()} `
-        + `(affichee ${w} px, fichier ${img.naturalWidth} px, `
-        + `${(img.naturalWidth / w).toFixed(1)}x, il en faut ${exige})`;
+        + `(affichee ${w} px, fichier ${reelle} px, `
+        + `${(reelle / w).toFixed(1)}x, il en faut ${exige})`;
     })
     .slice(0, 12);
+  // Une image rognee sans qu'on l'ait voulu.
+  //
+  // Defaut trouve le 13 septembre 2026 : des attributs width/height sur la
+  // balise, sans « height: auto » en CSS, et la hauteur de l'attribut devient
+  // la hauteur utilisee. Une photo 3:4 posee dans une colonne de 424 px
+  // s'affichait en 424x1280 ; object-fit: cover mangeait les trois quarts du
+  // sujet. La page restait belle, nette, dans les budgets — et amputee.
+  //
+  // Aucun autre controle ne pouvait le voir : le poids etait bon, la densite
+  // etait bonne, le contraste etait bon. Seul l'ecart entre le format de la
+  // boite et celui du fichier le dit.
+  //
+  // Le seuil est large (25 %) : un recadrage assume existe et n'est pas une
+  // faute. Ce qu'on cherche, c'est l'amputation involontaire.
+  const croppedImages = [...document.images]
+    .filter((img) => {
+      const b = img.getBoundingClientRect();
+      if (b.width < 40 || b.height < 40) return false;
+      if (!img.naturalWidth || !img.naturalHeight) return false;
+      const boite = b.width / b.height;
+      const source = img.naturalWidth / img.naturalHeight;
+      return Math.abs(boite - source) / source > 0.25;
+    })
+    .map((img) => {
+      const b = img.getBoundingClientRect();
+      const boite = b.width / b.height;
+      const source = img.naturalWidth / img.naturalHeight;
+      const perdu = Math.round((1 - Math.min(boite, source) / Math.max(boite, source)) * 100);
+      return `${(img.currentSrc || img.src).split('/').pop()} `
+        + `(boite ${Math.round(b.width)}x${Math.round(b.height)} = ${boite.toFixed(2)}, `
+        + `fichier ${source.toFixed(2)}, ${perdu}% du sujet hors cadre)`;
+    })
+    .slice(0, 12);
+
   const h1 = document.querySelectorAll('h1').length;
   const missingAlt = [...document.images].filter(img => !img.hasAttribute('alt')).length;
   return { placeholders, brokenImages, smallTargets, smallFontInputs, h1Count: h1,
-           imagesWithoutAlt: missingAlt, softImages, devicePixelRatio: ratio,
+           imagesWithoutAlt: missingAlt, softImages, croppedImages, devicePixelRatio: ratio,
            title: document.title, pageHeight: document.documentElement.scrollHeight };
 }
 """
@@ -205,6 +279,10 @@ def main():
         if data["h1Count"] != 1:
             problems += 1
             print(f"⚠ {data['h1Count']} balise(s) h1 (attendu : 1)")
+        if data.get("croppedImages"):
+            problems += len(data["croppedImages"])
+            print(f"⚠ Image(s) rognées sans l'avoir voulu — la boîte n'a pas le format "
+                  f"du fichier, le sujet sort du cadre : {data['croppedImages']}")
         if data.get("softImages"):
             problems += len(data["softImages"])
             print(f"⚠ Image(s) trop petites pour l'écran — elles paraîtront floues, "

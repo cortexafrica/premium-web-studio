@@ -315,7 +315,15 @@ def check_emails(text, hote_site):
     un domaine appartenant a un tiers, sans MX. Personne n'aurait jamais recu
     ces messages, et personne ne l'aurait su.
     """
-    racine = ".".join(hote_site.split(".")[-2:]) if hote_site else ""
+    # Sur une previsualisation, le domaine du site n'a aucun rapport avec celui
+    # de la marque : comparer une adresse a « localhost » ou a « github.io »
+    # produit un constat faux a tous les coups. Le controle du MX, lui, reste
+    # valable partout — c'est le seul qui dise si le courrier peut arriver.
+    previsualisation = (not hote_site
+                        or hote_site in ("localhost", "127.0.0.1", "[::1]")
+                        or hote_site.endswith((".github.io", ".vercel.app",
+                                               ".netlify.app", ".pages.dev")))
+    racine = "" if previsualisation else ".".join(hote_site.split(".")[-2:])
     vus, bloquants, remarques = set(), [], []
     for m in EMAIL_PAGE_RE.finditer(text):
         domaine = m.group(1).lower().rstrip(".")
@@ -535,9 +543,29 @@ def main():
         try:
             status, blob = fetch(og_image)
             if status != 200:
-                errors.append(f"Image de partage non servie ({status}) : {og_image}")
-                blob = None
-            source = "en ligne"
+                # Avant la premiere mise en ligne, l'adresse publique repond
+                # forcement 404. Conclure « image cassee » sur ce seul indice,
+                # c'est rendre un verdict a partir d'un echantillon unique. On
+                # regarde donc si le fichier est bien dans le build servi : si
+                # oui, ses dimensions sont verifiables et il ne reste qu'a
+                # confirmer l'adresse apres deploiement.
+                local = urljoin(args.url, urlparse(og_image).path.rsplit("/", 1)[-1])
+                try:
+                    statut_local, blob = fetch(local)
+                except Exception:
+                    statut_local, blob = 0, None
+                if statut_local == 200 and blob:
+                    source = "dans le build"
+                    warnings.append(
+                        f"Image de partage pas encore en ligne ({status}) : {og_image}. "
+                        f"Le fichier est bien servi par le build ({local}) et ses dimensions "
+                        "sont verifiees ici. A reverifier sur l'URL publique apres deploiement.")
+                else:
+                    blob = None
+                    errors.append(f"Image de partage non servie ({status}) : {og_image} — "
+                                  f"et absente du build a {local}.")
+            else:
+                source = "en ligne"
         except Exception as exc:
             local = urljoin(args.url, urlparse(og_image).path)
             try:
@@ -555,16 +583,35 @@ def main():
                 errors.append(f"Image de partage injoignable : {og_image} ({type(exc).__name__}) "
                               f"et absente du build à {local}.")
 
-        if blob is not None and data["ogImageWidth"] and data["ogImageHeight"]:
+        if blob is not None:
             try:
                 from PIL import Image
-                real = Image.open(BytesIO(blob)).size
-                declared = (int(data["ogImageWidth"]), int(data["ogImageHeight"]))
-                if real != declared:
-                    errors.append(f"Dimensions de l'image de partage fausses ({source}) : déclarées "
-                                  f"{declared[0]}x{declared[1]}, réelles {real[0]}x{real[1]}.")
             except ImportError:
-                warnings.append("Pillow absent : dimensions de l'image de partage non vérifiées.")
+                Image = None
+                warnings.append("Pillow absent : l'image de partage n'est pas ouverte.")
+
+            if Image is not None:
+                # On OUVRE toujours le fichier, meme sans dimensions declarees.
+                # Une adresse qui repond 200 avec autre chose qu'une image — la
+                # page 404 d'un hebergeur, une redirection vers l'accueil, une
+                # page de connexion — casse TOUS les apercus de partage sans
+                # qu'aucun autre controle ne s'en apercoive. C'est un defaut a
+                # part entiere, pas un effet de bord de la mesure des cotes.
+                try:
+                    real = Image.open(BytesIO(blob)).size
+                except Exception:
+                    real = None
+                    apercu = " ".join(blob[:80].decode("utf-8", "replace").split())
+                    errors.append(
+                        f"Image de partage : {og_image} repond mais ne contient pas une image "
+                        f"({source}, {len(blob)} octets, debut du corps : {apercu!r}). "
+                        "Tous les apercus de lien seront vides.")
+
+                if real and data["ogImageWidth"] and data["ogImageHeight"]:
+                    declared = (int(data["ogImageWidth"]), int(data["ogImageHeight"]))
+                    if real != declared:
+                        errors.append(f"Dimensions de l'image de partage fausses ({source}) : déclarées "
+                                      f"{declared[0]}x{declared[1]}, réelles {real[0]}x{real[1]}.")
 
     for field, label in (("ogTitle", "og:title"), ("ogDescription", "og:description"), ("ogUrl", "og:url")):
         if not data[field]:

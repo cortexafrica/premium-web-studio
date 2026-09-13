@@ -77,6 +77,10 @@ COLLECT_JS = """
     texts,
     checks: window.__FACT_CHECKS__ || [],
     bodyLength: (document.body.innerText || '').trim().length,
+    // Le texte rendu, pour chercher la mention de demonstration. On prend
+    // innerText et non textContent : ce qui est cache a l'ecran ne previent
+    // personne, et une mention en display:none ne vaut pas mieux qu'aucune.
+    bodyText: (document.body.innerText || '').slice(0, 200000),
   };
 }
 """
@@ -125,6 +129,32 @@ def parse_number(token):
         return float(t)
     except ValueError:
         return None
+
+
+# Mots qui suffisent a declarer une page comme demonstration. On cherche large
+# et en plusieurs langues : ce qui compte est qu'un visiteur soit averti, pas
+# qu'il le soit avec notre vocabulaire.
+AVEUX = ("demo", "démo", "demonstration", "démonstration", "fictional", "fictive",
+         "fictif", "sample", "example", "exemple", "mock", "not for sale",
+         "nothing is for sale", "rien n'est a vendre", "rien n'est à vendre")
+
+
+def faits_fictifs(path):
+    """Les identifiants declares « type »: « fiction » dans le registre.
+
+    Pourquoi ce controle existe (13 septembre 2026) : une page de marque
+    credible, avec de vraies photos, de vrais prix et une vraie date de sortie,
+    sera prise pour une vraie boutique. Quelqu'un peut y laisser son adresse,
+    attendre une livraison qui n'arrivera jamais, ou relayer le lien. Le tort
+    est reel meme sans transaction.
+
+    Le registre est l'endroit ou la fiction se DECLARE. Si elle y est declaree,
+    la page doit le dire au visiteur — sinon le registre sert a la cacher, ce
+    qui est exactement l'inverse de son role.
+    """
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    return [f["id"] for f in data.get("facts", []) + data.get("derived", [])
+            if str(f.get("type", "")).lower() == "fiction"]
 
 
 def load_facts(path):
@@ -208,14 +238,23 @@ def main():
         elif expected is None or actual is None or abs(float(expected) - float(actual)) > 1e-9:
             failed_checks.append({**check, "problem": f"attendu {expected}, rendu {actual}"})
 
+    # Faits fictifs : la page doit se declarer.
+    fictifs = faits_fictifs(args.facts)
+    texte_page = (data.get("bodyText") or data.get("text") or "").lower()
+    declaree = any(mot in texte_page for mot in AVEUX)
+    fiction_non_declaree = bool(fictifs) and not declaree
+
     report = {
         "target": args.target,
+        "fictional_facts": fictifs,
+        "declares_demo": declaree,
         "page_text_length": data.get("bodyLength", 0),
         "blank_page": blank,
         "unsourced_numbers": [{"number": n, "context": c} for n, c in unsourced.items()],
         "visual_checks": len(data["checks"]),
         "failed_visual_checks": failed_checks,
-        "passed": not blank and not unsourced and not failed_checks,
+        "passed": not blank and not unsourced and not failed_checks
+                  and not fiction_non_declaree,
     }
     if args.out:
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)
@@ -227,6 +266,17 @@ def main():
         print("   Cause la plus fréquente : le build est servi à la racine alors qu'il attend "
               "son chemin de base. Utilise « npm run preview » et l'URL complète, pas un "
               "serveur statique sur dist/.")
+    if fiction_non_declaree:
+        print(f"❌ {len(fictifs)} fait(s) inventé(s) affichés, et la page ne dit nulle part "
+              "qu'elle est une démonstration.")
+        print(f"   Concernés : {', '.join(fictifs[:8])}"
+              + (" …" if len(fictifs) > 8 else ""))
+        print("   Une page de marque crédible, avec de vraies photos et une vraie date, "
+              "sera prise pour une vraie boutique. Quelqu'un peut y laisser son adresse et "
+              "attendre une livraison qui n'arrivera jamais.")
+        print("   Attendu : une mention visible dans le texte de la page (un de ces mots : "
+              + ", ".join(AVEUX[:6]) + "…). Le registre déclare la fiction ; la page doit "
+              "la dire au visiteur, sinon le registre sert à la cacher.")
     for item in report["unsourced_numbers"]:
         print(f"❌ Nombre non sourcé « {item['number']} » : …{item['context']}…")
     for check in failed_checks:
