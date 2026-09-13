@@ -16,6 +16,9 @@ Il vérifie :
   - les unités métriques nues sur un marché impérial ;
   - les liens : un lien interne mort est bloquant, un lien externe mort est
     signalé (un catalogue tombé ne casse pas la page, il coupe la vente) ;
+  - les adresses e-mail écrites dans la page : leur domaine reçoit-il vraiment
+    du courrier ? (une page en production invitait à écrire à un domaine
+    appartenant à un tiers, sans MX) ;
   - les contradictions entre deux affirmations de la même page.
 
 Usage :
@@ -31,6 +34,7 @@ import json
 import re
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from io import BytesIO
 from pathlib import Path
@@ -275,6 +279,66 @@ def check_spelling(text, market):
 # « 20 euros » tiennent tous dedans ; une phrase qui mentionne la devise sans
 # rien facturer, non.
 FENETRE_MONTANT = 18
+
+
+EMAIL_PAGE_RE = re.compile(r"[A-Za-z0-9._%%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})")
+
+# Adresses de fournisseurs qu'on ne controle jamais et qui n'ont rien a faire
+# dans ce controle : elles apparaissent dans des exemples ou des mentions.
+DOMAINES_IGNORES = ("example.com", "example.org", "yourcompany.com", "sentry.io")
+
+
+def mx_existe(domaine):
+    """Le domaine peut-il recevoir du courrier ? (repond, interroge).
+
+    On passe par DNS-over-HTTPS : aucune dependance, et le nslookup de Windows
+    ignore une partie des types. Quand le resolveur ne repond pas, on le DIT
+    plutot que de conclure a l'absence — une panne de reseau n'est pas un
+    domaine mort.
+    """
+    url = ("https://dns.google/resolve?name="
+           + urllib.parse.quote(domaine) + "&type=MX")
+    requete = urllib.request.Request(url, headers={
+        "accept": "application/dns-json", "User-Agent": "check-release/1.0"})
+    try:
+        with urllib.request.urlopen(requete, timeout=25) as reponse:
+            data = json.loads(reponse.read(100_000).decode("utf-8", "replace"))
+    except Exception:
+        return False, False
+    return bool(data.get("Answer")), True
+
+
+def check_emails(text, hote_site):
+    """Les adresses ecrites dans la page peuvent-elles recevoir du courrier ?
+
+    Le defaut qui a motive ce controle : une page en ligne invitait a ecrire a
+    un domaine appartenant a un tiers, sans MX. Personne n'aurait jamais recu
+    ces messages, et personne ne l'aurait su.
+    """
+    racine = ".".join(hote_site.split(".")[-2:]) if hote_site else ""
+    vus, bloquants, remarques = set(), [], []
+    for m in EMAIL_PAGE_RE.finditer(text):
+        domaine = m.group(1).lower().rstrip(".")
+        if domaine in vus or domaine in DOMAINES_IGNORES:
+            continue
+        vus.add(domaine)
+        recoit, interroge = mx_existe(domaine)
+        adresse = m.group(0)
+        if not interroge:
+            remarques.append(
+                f"Adresse « {adresse} » : impossible de verifier si le domaine "
+                "recoit du courrier, aucun resolveur n'a repondu.")
+        elif not recoit:
+            bloquants.append(
+                f"Adresse « {adresse} » : le domaine « {domaine} » n'a AUCUN "
+                "enregistrement MX. Personne ne recevra ce qui y sera envoye, et "
+                "l'expediteur ne le saura pas.")
+        elif racine and not domaine.endswith(racine):
+            remarques.append(
+                f"Adresse « {adresse} » sur un domaine different du site "
+                f"(« {racine} »). Souvent legitime ; verifier que c'est bien la "
+                "sienne et pas celle d'un tiers recopiee.")
+    return bloquants, remarques
 
 
 def check_currency(text, market):
@@ -529,6 +593,13 @@ def main():
         if not (Path(args.dist) / "404.html").exists():
             errors.append(f"Pas de {args.dist}/404.html : une URL fausse tombera sur la page "
                           "d'erreur de l'hébergeur, pas sur la tienne.")
+
+    # --- Les adresses ecrites dans la page -----------------------------------
+    # Le SPF et le DMARC disent ce que le domaine peut ENVOYER. Ils ne disent
+    # rien des adresses ecrites dans la page, ni de leur capacite a RECEVOIR.
+    bloq_mail, rem_mail = check_emails(data["text"], urlparse(args.url).hostname or "")
+    errors.extend(bloq_mail)
+    warnings.extend(rem_mail)
 
     # --- Marché --------------------------------------------------------------
     for mot, phrase in check_currency(data["text"], args.market.lower()):
