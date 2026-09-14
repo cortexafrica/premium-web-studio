@@ -101,6 +101,41 @@ Une longue vidéo générée d'un bloc dérive : le produit change de forme, le 
 6. **Variante mobile** : générer les images clés en 9:16 dès le départ si le mobile domine, sinon utiliser le workflow `reframe` ; le recadrage automatique d'une vidéo 16:9 donne souvent une image trop petite.
 7. **Assembler** avec `scripts/video_to_frames.py` (plusieurs `--input` s'enchaînent dans l'ordre).
 
+## 5 bis. Une image d'essai avant la série — et ce n'est pas négociable
+
+**La règle.** Avant de lancer une série d'images dans un registre visuel qu'on
+n'a jamais produit, on en génère **une seule**, on l'ouvre, et on la compare à
+la référence. Ensuite seulement on lance le reste.
+
+**Pourquoi elle existe.** Le 14 septembre 2026, neuf avatars ont été lancés d'un
+coup pour une console. Ils sont sortis techniquement irréprochables — surfaces
+vides, touches de clavier sans lettrage, mains correctes, aucun logo — et
+**dans le mauvais registre** : des sculptures réalistes et graves là où la
+référence montrait des figurines stylisées et joyeuses.
+
+Le défaut n'était pas dans l'exécution, il était dans le cadrage. Une image
+d'essai l'aurait montré pour 0,12 crédit ; neuf ont coûté huit fois plus pour
+apprendre la même chose.
+
+**Ce que l'essai vérifie, dans cet ordre :**
+
+1. **Le registre** — est-ce la même *famille* que la référence ? Stylisé ou
+   réaliste, joyeux ou grave, détouré ou en situation. C'est ce qui se rate le
+   plus souvent, et c'est ce qu'aucune relecture de prompt ne rattrape.
+2. **La proportion** — cadrage, place du sujet, marge.
+3. **Les surfaces vides** — aucun faux lettrage, aucun logo. Décrire
+   positivement la surface vide, jamais interdire.
+4. **L'anatomie** — mains, doigts, visages.
+
+**Le piège du plan gratuit.** Higgsfield n'accepte que **quatre travaux
+simultanés** sur la formule gratuite. Une série de douze part en file, et une
+correction de registre doit attendre que la file se vide. Raison de plus pour
+que l'essai vienne en premier : il occupe un créneau, pas neuf.
+
+**Quand on peut s'en passer** : jamais sur un registre neuf. Sur un registre
+déjà validé dans le même projet, l'essai est inutile — la référence, c'est la
+série précédente.
+
 ## 6. Formules de prompts
 
 **Image clé**
