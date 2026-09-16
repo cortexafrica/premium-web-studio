@@ -1,6 +1,6 @@
 # Le sous-ensemble vietnamien
 
-Le défaut trouvé sur le site Ma Boutique, le 12 septembre 2026. C'est la
+Le défaut trouvé sur le site d'un client, en production. C'est la
 démonstration à montrer en premier : elle se comprend sans explication, et
 personne d'autre ne la voit.
 
@@ -81,3 +81,10 @@ Le site avait été relu, validé et publié. Ce n'est pas un défaut d'inattent
 
 Il n'y a que deux façons de l'attraper : mesurer le rendu, ou ne jamais
 l'attraper.
+
+## Les polices de cette démonstration
+
+Les deux fichiers `.woff2` sont des sous-ensembles d'**Archivo** (Omnibus-Type),
+distribuée sous **SIL Open Font License 1.1** — texte complet dans
+[`OFL.txt`](OFL.txt), à côté des fichiers. Ils ne sont là que pour reproduire la
+mesure ; aucun site livré ne doit les servir depuis ce dossier.

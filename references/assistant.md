@@ -35,7 +35,7 @@ nombre de tours, ni à la longueur. Valider, plafonner, tronquer.
 ### 2. Sa base de connaissances est écrite à la première personne du pluriel
 
 Le modèle reprend le registre de sa source. Une fiche rédigée à la troisième
-personne produit un assistant qui répond « Ma Boutique propose… » à chaque
+personne produit un assistant qui répond « <Nom de la marque> propose… » à chaque
 phrase, comme un annuaire — le visiteur sent immédiatement qu'il ne parle à
 personne.
 

@@ -74,7 +74,7 @@ fournisseur d'envoi ou dans la boîte.
 
 « Répondez directement » exige un `Reply-To`. Sans lui, répondre renvoie
 l'équipe à sa propre boîte, et personne ne s'en aperçoit : le message part, il
-ne revient pas en erreur, il n'arrive nulle part. Le 12 septembre 2026, un
+ne revient pas en erreur, il n'arrive nulle part. Sur un site livré, un
 prospect qui laissait un numéro WhatsApp sans e-mail déclenchait exactement
 cela.
 
@@ -125,8 +125,8 @@ Ces consignes ne passent aucun contrôle — le défaut ne se produit pas dans l
 code, il se produit **entre la consigne et la main du client**.
 
 **Ne jamais présenter un réglage sous forme de tableau dont les en-têtes
-reprennent les étiquettes du formulaire visé.** Le 12 septembre 2026, un réglage
-Supabase donné ainsi :
+reprennent les étiquettes du formulaire visé.** Lors d'une mise en production,
+un réglage Supabase donné ainsi :
 
 | Nom | Valeur |
 |---|---|

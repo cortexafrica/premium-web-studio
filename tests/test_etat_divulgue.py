@@ -4,8 +4,8 @@
 Un contrôle sans cas connu-faux ne prouve rien — il peut passer au vert parce
 qu'il ne regarde pas. Ce fichier tient le sien.
 
-Le cas 1 est un défaut réel : le corps exact que la fonction « ask » du site
-Ma Boutique renvoyait à n'importe qui en GET, le 12 septembre 2026. Elle ne
+Le cas 1 est un défaut réel : le corps exact que la fonction « ask » d'un site
+client renvoyait à n'importe qui en GET. Elle ne
 livrait aucune clé, mais elle confirmait qu'il y en avait une et qu'elle était
 en place — le premier renseignement que cherche quelqu'un qui sonde un service.
 
@@ -35,7 +35,7 @@ spec.loader.exec_module(cs)
 
 CAS = [
     # (corps servi, doit-il être signalé, ce qu'on éprouve)
-    (b'{"keyDetected":true}', True, "le défaut réel du 12 septembre 2026"),
+    (b'{"keyDetected":true}', True, "le défaut réel constaté en production"),
     (b'{"configured":false}', True, "l'aveu inverse : une clé manquante se dit aussi"),
     (b'{"version":"1.4.2"}', True, "une version sert à chercher la faille connue"),
     (b'{"debug":1}', True, "un mode debug laissé ouvert"),

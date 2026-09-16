@@ -202,7 +202,7 @@ def dns_zone(nom, type_num):
         return [], False
 
     # On interroge TOUS les serveurs de la zone, pas le premier qui repond.
-    # Constate le 12 septembre 2026 : trois interrogations d'affilee sur la
+    # Constate en production : trois interrogations d'affilee sur la
     # meme zone ont rendu « issuewild », puis « issue », puis « issue ». Les
     # noeuds d'un hebergeur ne convergent pas tous a la meme seconde apres une
     # modification. Conclure sur un echantillon, c'est tirer a pile ou face.

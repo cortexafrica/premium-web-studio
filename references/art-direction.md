@@ -91,8 +91,8 @@ signal n'arrive pas, le texte n'arrive pas. **Le visiteur ne voit pas une
 animation ratée, il voit une page trouée** — et il ne saura jamais ce qu'il a
 manqué.
 
-Quatre règles, toutes tirées de défauts constatés sur un site en production le
-12 septembre 2026. Les deux dernières viennent du **correctif lui-même** : le
+Quatre règles, toutes tirées de défauts constatés sur un site en production.
+Les deux dernières viennent du **correctif lui-même** : le
 filet de sécurité était plus dangereux que l'animation.
 
 **1. Le CSS ne masque jamais de lui-même.** Le piège d'origine : la feuille de

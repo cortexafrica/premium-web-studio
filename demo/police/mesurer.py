@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mesure les deux sous-ensembles et reproduit le constat du 12 septembre 2026.
+"""Mesure les deux sous-ensembles et reproduit un constat fait en production.
 
 Le fichier fautif s'est telecharge sans erreur, s'est preche sans erreur, et
 n'a produit aucun message nulle part. Le seul symptome visible etait que la
