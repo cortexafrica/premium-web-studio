@@ -1,6 +1,7 @@
 ---
 name: premium-web-studio
 description: Studio complet pour créer des sites web et landing pages de niveau agence (qualité « site à 10 000 $ ») à partir d'un lien, d'une photo produit, d'un logo, d'une fiche Shopify, d'un PDF ou d'une simple idée. Enchaîne extraction de marque, brief, direction artistique, génération d'images et de vidéos avec Higgsfield (MCP, CLI ou skills officiels), séquences cinématiques pilotées par le défilement, construction, revue visuelle automatisée et déploiement. Utilise ce skill dès que l'utilisateur veut créer ou refaire un site vitrine, une landing page, une page de vente ou de lancement produit, un site « cinématique », « scroll animation », « style Apple », un portfolio ou une page de marque, surtout s'il fournit un lien, une photo ou mentionne Higgsfield, Seedance, Kling, Veo, des visuels IA ou un rendu premium, même sans employer le mot « site ».
+argument-hint: [lien, image, ou description du site à créer]
 ---
 
 # Studio web premium
@@ -12,7 +13,19 @@ Le niveau « 10 000 $ » est une exigence de qualité, pas une promesse commerci
 ## Règles d'or
 
 1. **Le brief avant les pixels.** Aucune génération, aucun code avant un brief et un plan de direction relus.
-2. **Les images avant la vidéo.** On itère là où c'est bon marché ; point d'arrêt avant de dépenser des crédits vidéo.
+2. **Aucune dépense sans le solde sous les yeux.** Avant la première
+   génération payante : lire le solde, annoncer le coût de ce qui est prévu,
+   et ce qu'il restera après. Puis **une image d'essai** si le registre visuel
+   est neuf — voir `references/higgsfield-pipeline.md` §5 bis.
+
+   Les images avant la vidéo, et l'itération là où c'est bon marché. Point
+   d'arrêt obligatoire avant tout crédit vidéo.
+
+   **Pourquoi cette règle est en tête et non en note** : le 14 septembre 2026,
+   une série d'avatars a été relancée trois fois parce que la direction
+   visuelle bougeait. Cinq crédits et demi sur six ont disparu, et la vidéo du
+   jalon suivant est devenue inatteignable. Aucune des trois séries n'était
+   fautive ; c'est l'absence d'arrêt entre elles qui a coûté.
 3. **Un seul moment mémorable.** Tout le reste est calme et précis.
 4. **Mobile et réseau réels d'abord.** Version légère automatique, budgets de poids contrôlés.
 5. **Rien d'inventé qui engage la marque** : ni témoignage, ni chiffre, ni label, ni produit déformé.
